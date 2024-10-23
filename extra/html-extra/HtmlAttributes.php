@@ -22,15 +22,14 @@ final class HtmlAttributes
      * `['class' => ['a' => true, 'b' => true, 'c' => true]]`.
      *
      * style attributes are also merged into an array so they can be concatenated in later processing.
-     * style attributes are split into key, value pairs.
      *
-     * `HtmlAttributes::merge(['style' => 'color: red'], ['style' => 'background-color: blue'])` becomes
-     * `['style' => ['color' => 'red', 'background-color' => 'blue']]`.
+     * `HtmlAttributes::merge(['style' => 'color: red'], ['style' => ['background-color' => 'blue']])` becomes
+     * `['style' => ['color: red;' => true, 'background-color: blue;' => true]]`.
      *
      * style attributes which are arrays with false and null values are also processed
      *
      * `HtmlAttributes::merge(['style' => ['color: red' => true]], ['style' => ['display: block' => false]]) becomes
-     * `['style' => ['color' => 'red', 'display' => false]]`.
+     * `['style' => ['color: red;' => true, 'display: block;' => false]]`.
      *
      * attributes can be provided as an array of key, value where the value can be true, false or null.
      *
@@ -45,11 +44,11 @@ final class HtmlAttributes
      * `HtmlAttributes::merge([data' => ['count' => '1']])` becomes `['data-count' => '1']`.
      * `HtmlAttributes::merge(['aria' => ['hidden' => true]])` becomes `['aria-hidden' => true]`.
      *
-     * @see ./Tests/HtmlAttributesTest.php for usage examples
-     *
      * @param ...$attributeGroup
      * @return array
      * @throws RuntimeError
+     * @see ./Tests/HtmlAttributesTest.php for usage examples
+     *
      */
     public static function merge(...$attributeGroup): array
     {
@@ -64,7 +63,7 @@ final class HtmlAttributes
             // Skip empty attributes
             // Return early if no attributes are provided
             // This could be false or null when using the twig ternary operator
-            if(!$attributes) {
+            if (!$attributes) {
                 continue;
             }
 
@@ -134,7 +133,7 @@ final class HtmlAttributes
                                 $style = explode(':', $style);
                                 $sKey = trim($style[0]);
                                 $sValue = trim($style[1]);
-                                $result['style'][$sKey] = $sValue;
+                                $result['style']["$sKey: $sValue;"] = true;
                             }
                         } elseif (is_bool($v) || is_null($v)) {
                             $styles = array_filter(explode(';', $k));
@@ -142,12 +141,12 @@ final class HtmlAttributes
                                 $style = explode(':', $style);
                                 $sKey = trim($style[0]);
                                 $sValue = trim($style[1]);
-                                $result['style'][$sKey] = $v ? $sValue : $v;
+                                $result['style']["$sKey: $sValue;"] = $v;
                             }
                         } else {
                             $sKey = trim($k);
                             $sValue = trim($v);
-                            $result['style'][$sKey] = $sValue;
+                            $result['style']["$sKey: $sValue;"] = true;
                         }
                     }
                     continue;
@@ -158,5 +157,65 @@ final class HtmlAttributes
         }
 
         return $result;
+    }
+
+    public static function renderAttributes($attributes): string
+    {
+        $return = [];
+
+        foreach ($attributes as $key => $value) {
+
+            // Skip null values regardless of attribute key
+            if ($value === null) {
+                continue;
+            }
+
+            // Handle class, style, data-controller value coercion
+            // array[] -> concatenate string
+            if (in_array($key, ['class', 'style', 'data-controller'])) {
+                $value = array_filter($value);
+                $value = array_keys($value);
+                $value = implode(' ', $value);
+            }
+
+            // Handle aria-* value coercion
+            // true -> 'true'
+            // false -> 'false,
+            // array[] ->  concatenate string
+            if (str_starts_with($key, 'aria-')) {
+                if ($value === true) {
+                    $value = 'true';
+                } elseif ($value === false) {
+                    $value = 'false';
+                } elseif(is_array($value)) {
+                    $value = join(" ", array_filter($value));
+                }
+
+            }
+
+            // Handle data-* value coercion
+            // array[] -> json
+            if (str_starts_with($key, 'data-')) {
+                if(is_array($value)) {
+                    $value = json_encode($value);
+                }
+            }
+
+            // Skip false values
+            if ($value === false) {
+                continue;
+            }
+
+            // Boolean attribute doesn't have a value
+             if ($value === true) {
+                $return[] = $key;
+                continue;
+            }
+
+            // Everything else gets added as an encoded value
+            $return[] = $key . '="' . htmlspecialchars($value) . '"';
+        }
+
+        return implode(' ', $return);
     }
 }

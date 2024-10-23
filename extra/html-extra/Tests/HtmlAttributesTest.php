@@ -12,10 +12,12 @@ class HtmlAttributesTest extends TestCase
      * @dataProvider htmlAttrProvider
      * @throws RuntimeError
      */
-    public function testMerge(array $input, array $expected)
+    public function testMerge(array $attributes, array $expectedMergedAttributes, string $expectedAttributeString)
     {
-        $result = HtmlAttributes::merge(...$input);
-        self::assertSame($expected, $result);
+        $mergedAttributes = HtmlAttributes::merge(...$attributes);
+        self::assertSame($expectedMergedAttributes, $mergedAttributes);
+        $attributeString = HtmlAttributes::renderAttributes($mergedAttributes);
+        self::assertSame($attributeString, $expectedAttributeString);
     }
 
     public function testNonIterableAttributeValuesThrowException()
@@ -74,7 +76,6 @@ class HtmlAttributesTest extends TestCase
         ], $result);
     }
 
-
     public function htmlAttrProvider(): \Generator
     {
         yield 'merging basic attributes' => [
@@ -96,6 +97,7 @@ class HtmlAttributesTest extends TestCase
                 'j' => false,
                 'k' => null
             ],
+            'a="b" c="d" e="f" i',
         ];
 
         /**
@@ -122,13 +124,19 @@ class HtmlAttributesTest extends TestCase
                 'h' => true,
                 'i' => false,
             ]],
+            'class="a b c d e f g h"',
         ];
 
         /**
          * style attributes are merged into an array so they can be concatenated in later processing.
-         * style strings are split into key, value pairs eg. 'color: red' becomes ['color' => 'red']
-         * style attributes which are arrays with false and null values are also processed
-         * false and null values override string values eg. ['display: block' => false] becomes ['display' => false]
+         * // Strings are true by default.
+         * `HtmlAttributes::merge(['color: red']) === ['color: red' => true]`
+         * // Arrays have a boolean / null value
+         * `HtmlAttributes::merge(['color: red' => true ]) === ['color: red' => true]`
+         * `HtmlAttributes::merge(['color: red' => false ]) === ['color: red' => false]`
+         * String values are split into key value pairs and then processed
+         * `HtmlAttributes::merge(['color: red; background: blue']) === ['color: red' => true, 'background: blue' => true]`
+         * `HtmlAttributes::merge(['color: red; background: blue' => true]) === ['color: red' => true, 'background: blue' => true]`
          */
         yield 'merging style attributes' => [
             [
@@ -142,15 +150,16 @@ class HtmlAttributesTest extends TestCase
                 ]],
             ],
             ['style' => [
-                'a' => 'b',
-                'c' => 'd',
-                'e' => 'f',
-                'g' => 'h',
-                'i' => 'j',
-                'k' => 'l',
-                'm' => false,
-                'o' => null,
+                'a: b;' => true,
+                'c: d;' => true,
+                'e: f;' => true,
+                'g: h;' => true,
+                'i: j;' => true,
+                'k: l;' => true,
+                'm: n;' => false,
+                'o: p;' => null,
             ]],
+            'style="a: b; c: d; e: f; g: h; i: j; k: l;"',
         ];
 
         /**
@@ -158,26 +167,26 @@ class HtmlAttributesTest extends TestCase
          */
         yield 'merging data-* attributes' => [
             [
-                ['data-a' => 'a'],
-                ['data-b' => 'b'],
-                ['data-c' => true],
-                ['data-d' => false],
-                ['data-e' => null],
-                ['data-f' => ['a' => 'b']],
-                ['data' => ['g' => 'g', 'h' => true]],
-                ['data-h' => false],
-                ['data-h' => 'h'],
+                ['data-string' => 'a'],
+                ['data-int' => 100],
+                ['data-bool-true' => true],
+                ['data-bool-false' => false],
+                ['data-null' => null],
+                ['data-array' => ['a' => 'b']],
+                ['data' => ['expanded-0' => true, 'expanded-1' => false, 'expanded-2' => null]],
             ],
             [
-                'data-a' => 'a',
-                'data-b' => 'b',
-                'data-c' => true,
-                'data-d' => false,
-                'data-e' => null,
-                'data-f' => ['a' => 'b'],
-                'data-g' => 'g',
-                'data-h' => 'h',
+                'data-string' => 'a',
+                'data-int' => 100,
+                'data-bool-true' => true,
+                'data-bool-false' => false,
+                'data-null' => null,
+                'data-array' => ['a' => 'b'],
+                'data-expanded-0' => true,
+                'data-expanded-1' => false,
+                'data-expanded-2' => null,
             ],
+            'data-string="a" data-int="100" data-bool-true data-array="{&quot;a&quot;:&quot;b&quot;}" data-expanded-0'
         ];
 
         /**
@@ -185,26 +194,26 @@ class HtmlAttributesTest extends TestCase
          */
         yield 'merging aria-* attributes' => [
             [
-                ['aria-a' => 'a'],
-                ['aria-b' => 'b'],
-                ['aria-c' => true],
-                ['aria-d' => false],
-                ['aria-e' => null],
-                ['aria-f' => ['a' => 'b']],
-                ['aria' => ['g' => 'g', 'h' => true]],
-                ['aria-h' => false],
-                ['aria-h' => 'h'],
+                ['aria-string' => 'a'],
+                ['aria-int' => 100],
+                ['aria-bool-true' => true],
+                ['aria-bool-false' => false],
+                ['aria-null' => null],
+                ['aria-array' => ['a', 'b']],
+                ['aria' => ['expanded-0' => true, 'expanded-1' => false, 'expanded-2' => null]],
             ],
             [
-                'aria-a' => 'a',
-                'aria-b' => 'b',
-                'aria-c' => true,
-                'aria-d' => false,
-                'aria-e' => null,
-                'aria-f' => ['a' => 'b'],
-                'aria-g' => 'g',
-                'aria-h' => 'h',
+                'aria-string' => 'a',
+                'aria-int' => 100,
+                'aria-bool-true' => true,
+                'aria-bool-false' => false,
+                'aria-null' => null,
+                'aria-array' => ['a', 'b'],
+                'aria-expanded-0' => true,
+                'aria-expanded-1' => false,
+                'aria-expanded-2' => null,
             ],
+            'aria-string="a" aria-int="100" aria-bool-true="true" aria-bool-false="false" aria-array="a b" aria-expanded-0="true" aria-expanded-1="false"'
         ];
 
         yield 'merging data-controller attributes' => [
@@ -213,6 +222,7 @@ class HtmlAttributesTest extends TestCase
                 ['data-controller' => 'c3'],
                 ['data-controller' => ['c4' => true]],
                 ['data-controller' => ['c5' => false]],
+                ['data-controller' => ['c6' => null]],
             ],
             [
                 'data-controller' => [
@@ -220,9 +230,11 @@ class HtmlAttributesTest extends TestCase
                     'c2' => true,
                     'c3' => true,
                     'c4' => true,
-                    'c5' => false
+                    'c5' => false,
+                    'c6' => null
                 ],
             ],
+            'data-controller="c1 c2 c3 c4"'
         ];
 
 
